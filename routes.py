@@ -69,6 +69,27 @@ INDEX_TEMPLATE = """
         .product-stock { font-size: 12px; margin-bottom: 10px; }
         .product-upc { font-size: 11px; color: #999; margin-bottom: 10px; }
         .product-checkbox { margin-right: 8px; }
+        .quantity-selector { display: none; align-items: center; margin: 10px 0; }
+        .quantity-selector.show { display: flex; }
+        .product-card.selected { border-color: #007bff; box-shadow: 0 4px 8px rgba(0,123,255,0.2); }
+        .view-details-btn { background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; margin-top: 10px; width: 100%; }
+        .view-details-btn:hover { background: #5a6268; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 600px; border-radius: 8px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-title { font-size: 24px; font-weight: bold; color: #333; }
+        .close { color: #aaa; font-size: 28px; font-weight: bold; cursor: pointer; }
+        .close:hover { color: #000; }
+        .modal-body { line-height: 1.6; }
+        .product-detail-section { margin-bottom: 15px; }
+        .product-detail-label { font-weight: bold; color: #555; margin-bottom: 5px; }
+        .product-detail-value { color: #333; }
+        .product-images { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+        .product-image-modal { width: 100px; height: 100px; object-fit: cover; border-radius: 4px; }
+        .quantity-input { width: 60px; padding: 4px 8px; margin: 0 5px; border: 1px solid #ddd; border-radius: 4px; text-align: center; }
+        .quantity-btn { width: 30px; height: 30px; border: 1px solid #ddd; background: #f8f9fa; cursor: pointer; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+        .quantity-btn:hover { background: #e9ecef; }
+        .quantity-btn:disabled { background: #f8f9fa; cursor: not-allowed; opacity: 0.5; }
         .stock-high { color: #28a745; }
         .stock-low { color: #ffc107; }
         .stock-out { color: #dc3545; }
@@ -113,6 +134,19 @@ INDEX_TEMPLATE = """
         </div>
     </div>
 
+    <!-- Product Details Modal -->
+    <div id="productModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="modalProductTitle">Product Details</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body" id="modalProductBody">
+                <!-- Product details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
     <script>
         let selectedLocationId = null;
         let selectedProducts = [];
@@ -121,7 +155,26 @@ INDEX_TEMPLATE = """
         // Check authentication status on page load
         window.onload = function() {
             checkAuthStatus();
+            initializeModal();
         };
+        
+        function initializeModal() {
+            // Get the modal
+            const modal = document.getElementById('productModal');
+            const closeBtn = document.getElementsByClassName('close')[0];
+            
+            // Close modal when clicking the X
+            closeBtn.onclick = function() {
+                modal.style.display = 'none';
+            }
+            
+            // Close modal when clicking outside of it
+            window.onclick = function(event) {
+                if (event.target == modal) {
+                    modal.style.display = 'none';
+                }
+            }
+        }
         
         async function checkAuthStatus() {
             try {
@@ -247,7 +300,7 @@ INDEX_TEMPLATE = """
                         if (stock === 'TEMPORARILY_OUT_OF_STOCK') stockClass = 'stock-out';
                         
                         html += `<div class="product-card">
-                            <input type="checkbox" class="product-checkbox" id="prod-${product.productId}" value="${product.upc}">
+                            <input type="checkbox" class="product-checkbox" id="prod-${product.productId}" value="${product.upc}" onchange="updateProductQuantity('${product.upc}')">
                             ${imageUrl ? 
                                 `<img src="${imageUrl}" alt="${product.description}" class="product-image" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0xMDAgNTBMMTUwIDEwMEgxMzBWMTUwSDcwVjEwMEg1MEwxMDAgNTBaIiBmaWxsPSIjQ0NDQ0NDIi8+Cjx0ZXh0IHg9IjEwMCIgeT0iMTgwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOTk5OTk5IiBmb250LXNpemU9IjEyIj5ObyBJbWFnZTwvdGV4dD4KPC9zdmc+'; this.onerror=null;">` : 
                                 `<div class="product-image" style="background: #f5f5f5; display: flex; align-items: center; justify-content: center; color: #999; font-size: 14px;">No Image</div>`
@@ -257,6 +310,12 @@ INDEX_TEMPLATE = """
                             <div class="product-price">${price}</div>
                             <div class="product-stock ${stockClass}">Stock: ${stock}</div>
                             <div class="product-upc">UPC: ${product.upc}</div>
+                            <div class="quantity-selector">
+                                <button type="button" class="quantity-btn" onclick="decreaseQuantity('${product.upc}')" id="dec-${product.productId}">-</button>
+                                <input type="number" class="quantity-input" id="qty-${product.productId}" value="1" min="1" max="10" onchange="updateQuantityInput('${product.upc}')">
+                                <button type="button" class="quantity-btn" onclick="increaseQuantity('${product.upc}')" id="inc-${product.productId}">+</button>
+                            </div>
+                            <button class="view-details-btn" onclick="viewProductDetails('${product.productId}')">View Details</button>
                         </div>`;
                         selectedProducts.push({
                             upc: product.upc,
@@ -266,6 +325,11 @@ INDEX_TEMPLATE = """
                     });
                     html += '</div>';
                     document.getElementById('products').innerHTML = html;
+                    
+                    // Initialize quantity displays (hidden by default)
+                    selectedProducts.forEach(product => {
+                        updateQuantityDisplay(product.upc, product.quantity);
+                    });
                 } else {
                     document.getElementById('products').innerHTML = 
                         '<div class="error">✗ Product search failed: ' + data.error + '</div>';
@@ -306,6 +370,245 @@ INDEX_TEMPLATE = """
             window.open('https://www.kroger.com/cart', '_blank');
         }
         
+        async function viewProductDetails(productId) {
+            if (!selectedLocationId) {
+                alert('Please select a store location first');
+                return;
+            }
+            
+            try {
+                // Show loading state
+                const modal = document.getElementById('productModal');
+                const modalBody = document.getElementById('modalProductBody');
+                const modalTitle = document.getElementById('modalProductTitle');
+                
+                modalTitle.textContent = 'Loading Product Details...';
+                modalBody.innerHTML = '<div style="text-align: center; padding: 20px;">Loading...</div>';
+                modal.style.display = 'block';
+                
+                // Fetch detailed product information
+                const response = await fetch(`/api/products/${productId}?location_id=${selectedLocationId}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayProductDetails(data.data);
+                } else {
+                    modalTitle.textContent = 'Error';
+                    modalBody.innerHTML = `<div class="error">Failed to load product details: ${data.error}</div>`;
+                }
+            } catch (error) {
+                const modal = document.getElementById('productModal');
+                const modalBody = document.getElementById('modalProductBody');
+                const modalTitle = document.getElementById('modalProductTitle');
+                
+                modalTitle.textContent = 'Error';
+                modalBody.innerHTML = `<div class="error">Error loading product details: ${error.message}</div>`;
+                modal.style.display = 'block';
+            }
+        }
+        
+        function displayProductDetails(product) {
+            const modal = document.getElementById('productModal');
+            const modalBody = document.getElementById('modalProductBody');
+            const modalTitle = document.getElementById('modalProductTitle');
+            
+            modalTitle.textContent = product.description || 'Product Details';
+            
+            // Get product images
+            let imagesHtml = '';
+            if (product.images && product.images.length > 0) {
+                imagesHtml = '<div class="product-detail-section"><div class="product-detail-label">Images:</div><div class="product-images">';
+                product.images.forEach(image => {
+                    if (image.sizes && image.sizes.length > 0) {
+                        const imageUrl = image.sizes[0].url;
+                        imagesHtml += `<img src="${imageUrl}" alt="${product.description}" class="product-image-modal" onerror="this.style.display='none'">`;
+                    }
+                });
+                imagesHtml += '</div></div>';
+            }
+            
+            // Get pricing information
+            let pricingHtml = '';
+            if (product.items && product.items[0]) {
+                const item = product.items[0];
+                if (item.price) {
+                    pricingHtml = `
+                        <div class="product-detail-section">
+                            <div class="product-detail-label">Pricing:</div>
+                            <div class="product-detail-value">
+                                Regular Price: $${item.price.regular || 'N/A'}<br>
+                                ${item.price.promo ? `Sale Price: $${item.price.promo}<br>` : ''}
+                                ${item.price.regularPerUnitEstimate ? `Per Unit: $${item.price.regularPerUnitEstimate}<br>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (item.nationalPrice) {
+                    pricingHtml += `
+                        <div class="product-detail-section">
+                            <div class="product-detail-label">National Pricing:</div>
+                            <div class="product-detail-value">
+                                Regular: $${item.nationalPrice.regular || 'N/A'}<br>
+                                ${item.nationalPrice.promo ? `Sale: $${item.nationalPrice.promo}<br>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Get fulfillment information
+            let fulfillmentHtml = '';
+            if (product.items && product.items[0] && product.items[0].fulfillment) {
+                const fulfillment = product.items[0].fulfillment;
+                fulfillmentHtml = `
+                    <div class="product-detail-section">
+                        <div class="product-detail-label">Availability:</div>
+                        <div class="product-detail-value">
+                            In Store: ${fulfillment.instore ? 'Yes' : 'No'}<br>
+                            Delivery: ${fulfillment.delivery ? 'Yes' : 'No'}<br>
+                            Curbside Pickup: ${fulfillment.curbside ? 'Yes' : 'No'}<br>
+                            Ship to Home: ${fulfillment.shiptohome ? 'Yes' : 'No'}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Get aisle locations
+            let aisleHtml = '';
+            if (product.aisleLocations && product.aisleLocations.length > 0) {
+                aisleHtml = '<div class="product-detail-section"><div class="product-detail-label">Aisle Locations:</div><div class="product-detail-value">';
+                product.aisleLocations.forEach(location => {
+                    aisleHtml += `${location.description || 'Aisle ' + location.number}<br>`;
+                });
+                aisleHtml += '</div></div>';
+            }
+            
+            modalBody.innerHTML = `
+                ${imagesHtml}
+                <div class="product-detail-section">
+                    <div class="product-detail-label">Product ID:</div>
+                    <div class="product-detail-value">${product.productId}</div>
+                </div>
+                <div class="product-detail-section">
+                    <div class="product-detail-label">UPC:</div>
+                    <div class="product-detail-value">${product.upc}</div>
+                </div>
+                <div class="product-detail-section">
+                    <div class="product-detail-label">Brand:</div>
+                    <div class="product-detail-value">${product.brand || 'N/A'}</div>
+                </div>
+                <div class="product-detail-section">
+                    <div class="product-detail-label">Categories:</div>
+                    <div class="product-detail-value">${product.categories ? product.categories.join(', ') : 'N/A'}</div>
+                </div>
+                <div class="product-detail-section">
+                    <div class="product-detail-label">Country of Origin:</div>
+                    <div class="product-detail-value">${product.countryOrigin || 'N/A'}</div>
+                </div>
+                ${pricingHtml}
+                ${fulfillmentHtml}
+                ${aisleHtml}
+                <div class="product-detail-section">
+                    <div class="product-detail-label">Product Page:</div>
+                    <div class="product-detail-value">
+                        <a href="https://www.kroger.com${product.productPageURI}" target="_blank" style="color: #007bff;">
+                            View on Kroger.com
+                        </a>
+                    </div>
+                </div>
+            `;
+            
+            modal.style.display = 'block';
+        }
+        
+        function increaseQuantity(upc) {
+            const input = document.querySelector(`input[value="${upc}"]`);
+            if (!input.checked) return; // Only work if product is selected
+            
+            const product = selectedProducts.find(p => p.upc === upc);
+            if (product && product.quantity < 10) {
+                product.quantity++;
+                updateQuantityDisplay(upc, product.quantity);
+            }
+        }
+        
+        function decreaseQuantity(upc) {
+            const input = document.querySelector(`input[value="${upc}"]`);
+            if (!input.checked) return; // Only work if product is selected
+            
+            const product = selectedProducts.find(p => p.upc === upc);
+            if (product && product.quantity > 1) {
+                product.quantity--;
+                updateQuantityDisplay(upc, product.quantity);
+            }
+        }
+        
+        function updateQuantityInput(upc) {
+            const input = document.querySelector(`input[value="${upc}"]`);
+            if (!input.checked) return; // Only work if product is selected
+            
+            const product = selectedProducts.find(p => p.upc === upc);
+            if (product) {
+                const quantityInput = input.closest('.product-card').querySelector('.quantity-input');
+                let newQuantity = parseInt(quantityInput.value);
+                
+                // Validate quantity
+                if (isNaN(newQuantity) || newQuantity < 1) {
+                    newQuantity = 1;
+                } else if (newQuantity > 10) {
+                    newQuantity = 10;
+                }
+                
+                product.quantity = newQuantity;
+                updateQuantityDisplay(upc, newQuantity);
+            }
+        }
+        
+        function updateQuantityDisplay(upc, quantity) {
+            const product = selectedProducts.find(p => p.upc === upc);
+            if (product) {
+                const input = document.querySelector(`input[value="${upc}"]`);
+                const card = input.closest('.product-card');
+                const quantityInput = card.querySelector('.quantity-input');
+                const decBtn = card.querySelector('[onclick*="decreaseQuantity"]');
+                const incBtn = card.querySelector('[onclick*="increaseQuantity"]');
+                
+                // Update input value
+                quantityInput.value = quantity;
+                
+                // Update button states
+                decBtn.disabled = quantity <= 1;
+                incBtn.disabled = quantity >= 10;
+            }
+        }
+        
+        function updateProductQuantity(upc) {
+            const input = document.querySelector(`input[value="${upc}"]`);
+            const card = input.closest('.product-card');
+            const quantitySelector = card.querySelector('.quantity-selector');
+            const quantityInput = card.querySelector('.quantity-input');
+            const quantity = parseInt(quantityInput.value) || 1;
+            
+            const product = selectedProducts.find(p => p.upc === upc);
+            
+            if (input.checked) {
+                // Show quantity selector when product is selected
+                quantitySelector.classList.add('show');
+                card.classList.add('selected');
+                if (product) {
+                    product.quantity = quantity;
+                }
+            } else {
+                // Hide quantity selector when product is deselected
+                quantitySelector.classList.remove('show');
+                card.classList.remove('selected');
+                if (product) {
+                    product.quantity = 1; // Reset to default
+                }
+            }
+        }
+        
         async function addToCart() {
             if (!isAuthenticated) {
                 alert('Please login to Kroger first');
@@ -317,11 +620,14 @@ INDEX_TEMPLATE = """
                 return;
             }
             
-            const items = Array.from(checkboxes).map(cb => ({
-                upc: selectedProducts.find(p => p.upc === cb.value)?.upc,
-                quantity: 1,
-                modality: 'PICKUP'
-            })).filter(item => item.upc);
+            const items = Array.from(checkboxes).map(cb => {
+                const product = selectedProducts.find(p => p.upc === cb.value);
+                return {
+                    upc: product?.upc,
+                    quantity: product?.quantity || 1,
+                    modality: 'PICKUP'
+                };
+            }).filter(item => item.upc);
             
             try {
                 const response = await fetch('/api/cart/add', {
@@ -383,12 +689,11 @@ def search_locations():
         lat = float(request.args.get('lat'))
         lon = float(request.args.get('lon'))
         radius = int(request.args.get('radius', 10))
-        limit = int(request.args.get('limit', 10))
         
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         result = loop.run_until_complete(
-            kroger_service.search_locations(lat, lon, radius, limit)
+            kroger_service.search_locations(lat, lon, radius)
         )
         loop.close()
         

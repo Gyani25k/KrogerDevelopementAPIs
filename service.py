@@ -101,7 +101,7 @@ class KrogerAPIService:
             logger.error(f"Failed to get client token: {e}")
             raise Exception(f"Authentication failed: {e}")
     
-    async def search_locations(self, lat: float, lon: float, radius_miles: int = 10, limit: int = 10) -> Dict:
+    async def search_locations(self, lat: float, lon: float, radius_miles: int = 10) -> Dict:
         """
         Search for Kroger locations near given coordinates
         GET /v1/locations
@@ -116,8 +116,7 @@ class KrogerAPIService:
         params = {
             "filter.lat.near": lat,
             "filter.lon.near": lon,
-            "filter.radiusInMiles": radius_miles,
-            "filter.limit": limit
+            "filter.radiusInMiles": radius_miles
         }
         
         try:
